@@ -27,6 +27,9 @@ var localFiles *widget.List
 var localFileItems []string
 var currentLocalPath string
 
+var selectedLocalFile widget.ListItemID = -1
+var selectedRemoteFile widget.ListItemID = -1
+
 var appWindow fyne.Window
 var appLogger *logger.Logger
 
@@ -76,6 +79,12 @@ func createMainUI(w fyne.Window) fyne.CanvasObject {
 		func() fyne.CanvasObject { return widget.NewLabel("template") },
 		func(i widget.ListItemID, o fyne.CanvasObject) { o.(*widget.Label).SetText(localFileItems[i]) },
 	)
+	localFiles.OnSelected = func(id widget.ListItemID) {
+		selectedLocalFile = id
+	}
+	localFiles.OnUnselected = func(id widget.ListItemID) {
+		selectedLocalFile = -1
+	}
 	updateLocalFiles()
 
 	// Remote file view
@@ -84,6 +93,12 @@ func createMainUI(w fyne.Window) fyne.CanvasObject {
 		func() fyne.CanvasObject { return widget.NewLabel("template") },
 		func(i widget.ListItemID, o fyne.CanvasObject) { o.(*widget.Label).SetText(remoteFileItems[i]) },
 	)
+	remoteFiles.OnSelected = func(id widget.ListItemID) {
+		selectedRemoteFile = id
+	}
+	remoteFiles.OnUnselected = func(id widget.ListItemID) {
+		selectedRemoteFile = -1
+	}
 
 	// Action buttons
 	uploadButton := widget.NewButton("Upload", func() { handleUpload(w) })
@@ -121,12 +136,12 @@ func handleUpload(w fyne.Window) {
 		dialog.ShowInformation("Error", "Not connected to a bucket.", w)
 		return
 	}
-	if len(localFiles.Selected) == 0 {
+	if selectedLocalFile == -1 {
 		dialog.ShowInformation("Error", "No local file selected.", w)
 		return
 	}
 
-	selectedFileName := localFileItems[localFiles.Selected[0]]
+	selectedFileName := localFileItems[selectedLocalFile]
 	localPath := filepath.Join(currentLocalPath, selectedFileName)
 
 	appLogger.Info(fmt.Sprintf("Uploading '%s' to '%s'...", selectedFileName, activeBookmark.BucketName))
@@ -145,12 +160,12 @@ func handleDownload(w fyne.Window) {
 		dialog.ShowInformation("Error", "Not connected to a bucket.", w)
 		return
 	}
-	if len(remoteFiles.Selected) == 0 {
+	if selectedRemoteFile == -1 {
 		dialog.ShowInformation("Error", "No remote file selected.", w)
 		return
 	}
 
-	selectedObjectKey := remoteFileItems[remoteFiles.Selected[0]]
+	selectedObjectKey := remoteFileItems[selectedRemoteFile]
 	dialog.ShowFileSave(func(uri fyne.URIWriteCloser, err error) {
 		if err != nil {
 			appLogger.Error(err)
@@ -178,12 +193,12 @@ func handleDelete(w fyne.Window) {
 		dialog.ShowInformation("Error", "Not connected to a bucket.", w)
 		return
 	}
-	if len(remoteFiles.Selected) == 0 {
+	if selectedRemoteFile == -1 {
 		dialog.ShowInformation("Error", "No remote file selected.", w)
 		return
 	}
 
-	selectedObjectKey := remoteFileItems[remoteFiles.Selected[0]]
+	selectedObjectKey := remoteFileItems[selectedRemoteFile]
 	dialog.ShowConfirm("Confirm Delete", "Are you sure you want to delete "+selectedObjectKey+"?", func(ok bool) {
 		if ok {
 			appLogger.Info(fmt.Sprintf("Deleting '%s'...", selectedObjectKey))
@@ -209,16 +224,24 @@ func createMainMenu(w fyne.Window) *fyne.MainMenu {
 }
 
 func showBookmarkDialog(w fyne.Window) {
+	var selectedBookmark widget.ListItemID = -1
+
 	bookmarkList = widget.NewList(
 		func() int { return len(currentBookmarks) },
 		func() fyne.CanvasObject { return widget.NewLabel("template") },
 		func(i widget.ListItemID, o fyne.CanvasObject) { o.(*widget.Label).SetText(currentBookmarks[i].Name) },
 	)
+	bookmarkList.OnSelected = func(id widget.ListItemID) {
+		selectedBookmark = id
+	}
+	bookmarkList.OnUnselected = func(id widget.ListItemID) {
+		selectedBookmark = -1
+	}
 
 	var d dialog.Dialog
 	connectButton := widget.NewButton("Connect", func() {
-		if len(bookmarkList.Selected) > 0 {
-			selected := currentBookmarks[bookmarkList.Selected[0]]
+		if selectedBookmark != -1 {
+			selected := currentBookmarks[selectedBookmark]
 			activeBookmark = &selected
 			connectToBookmark(w, selected)
 			d.Hide()
@@ -235,8 +258,8 @@ func showBookmarkDialog(w fyne.Window) {
 	})
 
 	editButton := widget.NewButton("Edit", func() {
-		if len(bookmarkList.Selected) > 0 {
-			selectedIndex := bookmarkList.Selected[0]
+		if selectedBookmark != -1 {
+			selectedIndex := selectedBookmark
 			showAddEditBookmarkDialog(w, &currentBookmarks[selectedIndex], func(updatedBookmark bookmarks.Bookmark) {
 				currentBookmarks[selectedIndex] = updatedBookmark
 				saveBookmarks()
@@ -247,8 +270,8 @@ func showBookmarkDialog(w fyne.Window) {
 	})
 
 	deleteButton := widget.NewButton("Delete", func() {
-		if len(bookmarkList.Selected) > 0 {
-			selectedIndex := bookmarkList.Selected[0]
+		if selectedBookmark != -1 {
+			selectedIndex := selectedBookmark
 			bookmarkName := currentBookmarks[selectedIndex].Name
 			currentBookmarks = append(currentBookmarks[:selectedIndex], currentBookmarks[selectedIndex+1:]...)
 			saveBookmarks()
